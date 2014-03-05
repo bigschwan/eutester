@@ -184,6 +184,7 @@ class Euproperty_Manager():
         self.property_map = Property_Map()
         self.update_property_list()
         self.tester.property_manager = self
+        self.zones = self.tester.get_zones()
         
     def get_clc(self):
         return self.tester.service_manager.get_enabled_clc().machine   
@@ -277,6 +278,12 @@ class Euproperty_Manager():
                                         debug_method=debug_method,
                                         descriptions=True)
 
+    def show_all_imaging_properties(self,partition=None,debug_method=None):
+        return self.show_all_properties(service_type=Euproperty_Type.imaging,
+                                        partition=partition,
+                                        debug_method=debug_method,
+                                        descriptions=True)
+
 
     def show_all_properties(self,
                             partition=None,
@@ -347,6 +354,7 @@ class Euproperty_Manager():
         newlist = []
         newprop = None
         self.debug("updating property list...")
+        self.zones = self.tester.get_zones()
         cmdout = self.work_machine.sys(self.cmdpath+'euca-describe-properties -v -U ' + str(self.service_url) +
                                        ' -I ' + str(self.access_key) +
                                        ' -S ' + str(self.secret_key) +
@@ -404,7 +412,6 @@ class Euproperty_Manager():
         '''
         #self.debug('parse_euproperty_from_string, string:'+str(propstring))
         propstring = str(propstring).replace('PROPERTY','').strip()
-        print 'Parsing property:' +str(propstring)
         ret_service_type = None
         ret_partition = None
         splitstring = propstring.split()
@@ -418,29 +425,24 @@ class Euproperty_Manager():
             if prop.property_string == property_string:
                 prop.lastvalue = prop.value
                 prop.value = ret_value
-                print 'this property was already in our list:' + str(property_string)
                 return prop
         ret_name = property_string
         #...otherwise this property is not in our list yet, create a new property
         #parse property string into values...
         propattrs = property_string.split('.')
 
-        #See if the first element is a partition
-        partitions = self.tester.get_zones()
-
-        #First store and remove the partition if it's in the list
-        for part in partitions:
-            if part == propattrs[0]:
-                #Assume this is the partition id/name, remove it from the propattrs list
+        #See if the first element is a zone-partition
+        #First store and remove the zone-partition if it's in the list
+        for zone in self.zones:
+            if zone == propattrs[0]:
+                #Assume this is the zone-partition id/name, remove it from the propattrs list
                 ret_partition = propattrs.pop(0)
-                print 'Got the partition:' +str(ret_partition)
                 break
         #Move along items in list until we reach a service type
         for index in xrange(0,len(propattrs)):
             try:
                 ret_service_type = Euproperty_Type.get_type_by_string(propattrs[index])
                 propattrs.remove(propattrs[index])
-                print "got the service type:" + str(ret_service_type)
                 break
             except AttributeError:
                 pass
@@ -454,7 +456,6 @@ class Euproperty_Manager():
 
         #Store the name of the property
         ret_name = ".".join(propattrs)
-        print 'Got the service name:' + str(ret_name)
         newprop = Euproperty(self, property_string, ret_service_type,  ret_partition, ret_name, ret_value)
         return newprop
 
@@ -471,7 +472,7 @@ class Euproperty_Manager():
             if not hasattr(context, str(euproperty.service_type)):
                 setattr(context, str(euproperty.service_type), Property_Map())
             context = getattr(context, str(euproperty.service_type))
-        object_name = str(euproperty.service_type).replace('.','_') + "_" + str(euproperty.name).replace('.','_')
+        object_name = str(euproperty.name).replace('.','_')
         if not hasattr(context,object_name):
             setattr(context, object_name, euproperty)
         if not hasattr(all_map, object_name):
