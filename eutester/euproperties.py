@@ -79,15 +79,17 @@ class Euproperty_Type():
     cloudwatch = 'cloudwatch'
     cluster = 'cluster'
     dns ='dns'
+    imaging = 'imaging'
     loadbalancing = 'loadbalancing'
+    objectstorage='objectstorage'
     reporting = 'reporting'
     storage = 'storage'
     system = 'system'
     tagging = 'tagging'
+    tokens='tokens'
     vmwarebroker = 'vmwarebroker'
     walrus = 'walrus'
     www = 'www'
-
 
     @classmethod
     def get_type_by_string(cls, typestring):
@@ -169,14 +171,14 @@ class Euproperty_Manager():
     verbose = False
     debugmethod = None
     
-    def __init__(self, tester, verbose=False, machine=None, debugmethod=None):
+    def __init__(self, tester, verbose=False, machine=None, service_url=None, debugmethod=None):
         self.tester = tester
         self.debugmethod = debugmethod or tester.debug
         self.verbose = verbose
         self.work_machine =  machine or self.get_clc()
         self.access_key = self.tester.aws_access_key_id
         self.secret_key = self.tester.aws_secret_access_key
-        self.service_url = 'http://'+str(self.tester.get_ec2_ip())+':8773/services/Eucalytpus'
+        self.service_url =  service_url or 'http://' + str(self.get_clc().hostname) + ':8773/services/Eucalytpus'
         self.cmdpath = self.tester.eucapath+'/usr/sbin/'
         self.properties = []
         self.property_map = Property_Map()
@@ -402,6 +404,7 @@ class Euproperty_Manager():
         '''
         #self.debug('parse_euproperty_from_string, string:'+str(propstring))
         propstring = str(propstring).replace('PROPERTY','').strip()
+        print 'Parsing property:' +str(propstring)
         ret_service_type = None
         ret_partition = None
         splitstring = propstring.split()
@@ -415,6 +418,7 @@ class Euproperty_Manager():
             if prop.property_string == property_string:
                 prop.lastvalue = prop.value
                 prop.value = ret_value
+                print 'this property was already in our list:' + str(property_string)
                 return prop
         ret_name = property_string
         #...otherwise this property is not in our list yet, create a new property
@@ -422,18 +426,21 @@ class Euproperty_Manager():
         propattrs = property_string.split('.')
 
         #See if the first element is a partition
-        partitions = self.tester.service_manager.get_all_partitions()
+        partitions = self.tester.get_zones()
 
+        #First store and remove the partition if it's in the list
         for part in partitions:
-            if part.name == propattrs[0]:
+            if part == propattrs[0]:
                 #Assume this is the partition id/name, remove it from the propattrs list
                 ret_partition = propattrs.pop(0)
+                print 'Got the partition:' +str(ret_partition)
                 break
         #Move along items in list until we reach a service type
         for index in xrange(0,len(propattrs)):
             try:
                 ret_service_type = Euproperty_Type.get_type_by_string(propattrs[index])
                 propattrs.remove(propattrs[index])
+                print "got the service type:" + str(ret_service_type)
                 break
             except AttributeError:
                 pass
@@ -447,6 +454,7 @@ class Euproperty_Manager():
 
         #Store the name of the property
         ret_name = ".".join(propattrs)
+        print 'Got the service name:' + str(ret_name)
         newprop = Euproperty(self, property_string, ret_service_type,  ret_partition, ret_name, ret_value)
         return newprop
 
